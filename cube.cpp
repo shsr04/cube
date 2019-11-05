@@ -1,7 +1,43 @@
 #include "range.hpp"
 #include "sdl_wrap.hpp"
+#include "sdl_wrap_gl.hpp"
+#include <SDL2/SDL_events.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_video.h>
+#include <array>
+
+void handleEvents(bool &quit, int &mode, Cube &c) {
+    SDL_Event e;
+    if (SDL_PollEvent(&e)) {
+        if (e.type == SDL_KEYDOWN) {
+            switch (e.key.keysym.sym) {
+            case SDLK_1:
+                mode = 1;
+                break;
+            case SDLK_2:
+                mode = 2;
+                break;
+            case SDLK_w:
+                c.rot_[1] += 3.0;
+                break;
+            case SDLK_s:
+                c.rot_[1] -= 3.0;
+                break;
+            case SDLK_a:
+                c.rot_[0] += 3.0;
+                break;
+            case SDLK_d:
+                c.rot_[0] -= 3.0;
+                break;
+            case SDLK_ESCAPE:
+                e.type = SDL_QUIT;
+                break;
+            }
+        }
+        if (e.type == SDL_QUIT)
+            quit = true;
+    }
+}
 
 int main() {
     Init _init;
@@ -22,56 +58,31 @@ int main() {
     glFrustum(-1, 1, -1, 1, 0, 10);
     gl.matrix(GL_MODELVIEW);
     gl.setClearColor({0.35f, 0.35f, 0.35f, 1.f});
+    const std::array<GLfloat, 4> lightPos = {0, 5, 2, 0};
+    gl.lighting(lightPos, {.9, 0, .9, 1}, 0.9);
+    Cube c({-0.5, 0.5, 1}, {0, 50, 20}, {0.5, 0.5, 0.5});
 
-    glShadeModel(GL_SMOOTH);
-    std::array<GLfloat, 4> lightPosition = {0, 2, 1, 1};
-    std::array<GLfloat, 4> lightAmbient = {.2, .2, .2, 1};
-    std::array<GLfloat, 4> lightDiffuse = {.5, .5, .5, 1};
-    std::array<GLfloat, 4> lightSpecular = {.3, .3, .3, 1};
-    std::array<GLfloat, 4> materialDiffuse = {.9, 0, .9, 1};
-    std::array<GLfloat, 4> materialSpecular = {.1, .1, .1, 1};
-    glLightfv(GL_LIGHT0, GL_POSITION, lightPosition.data());
-    glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient.data());
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse.data());
-    glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular.data());
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, materialDiffuse.data());
-    glMaterialfv(GL_FRONT, GL_SPECULAR, materialSpecular.data());
-    glMaterialf(GL_FRONT, GL_SHININESS, 0.3);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-
+    bool quit = false;
     int mode = 1;
-    while (true) {
-        SDL_Event e;
-        if (SDL_PollEvent(&e)) {
-            if (e.type == SDL_KEYDOWN) {
-                switch (e.key.keysym.sym) {
-                case SDLK_1:
-                    mode = 1;
-                    break;
-                case SDLK_2:
-                    mode = 2;
-                    break;
-                case SDLK_ESCAPE:
-                    e.type = SDL_QUIT;
-                    break;
-                }
-            }
-            if (e.type == SDL_QUIT)
-                break;
-        }
+    while (!quit) {
+        handleEvents(quit, mode, c);
         gl.clear();
-        glColor3f(1, 0, 1);
-        glLoadIdentity();
-        glScaled(0.5, 0.5, 0.5);
-        glRotated(50, 0, 1, 0.3);
-        // glTranslated(-0.5, 0.5, 1);
-        glDisable(GL_LIGHTING);
-        glLineWidth(5.0);
-        gl.draw<2, 3>(GL_LINE, {{{0, 2, 1}, {0, 0, 0}}}, {1, 0, 0, 1});
-        gl.drawAxes();
-        glEnable(GL_LIGHTING);
-        gl.draw(GL_QUADS, Cube::v_, {1, 0, 1, 1});
+        newMatrix([&] {
+            c.scale();
+            c.rotate();
+            c.translate();
+            newIdMatrix([&] {
+                glDisable(GL_LIGHTING);
+                glLineWidth(5.0);
+                gl.draw<2, 3>(
+                    GL_LINES,
+                    {{{lightPos[0], lightPos[1], lightPos[2]}, {0, 0, 0}}},
+                    {1, 1, 1, 1});
+                //gl.drawAxes();
+                glEnable(GL_LIGHTING);
+            });
+            c.draw(&gl);
+        });
         gl.swapBuffers();
     }
 }

@@ -5,7 +5,7 @@
 
 #define DEF_COPY(name, ident)                                                  \
     name(name const &) = ident;                                                \
-    auto operator=(name const &) = ident;
+    name &operator=(name const &) = ident;
 #define DEF_MOVE(name, ident)                                                  \
     name(name &&) = ident;                                                     \
     name &operator=(name &&) = ident;
