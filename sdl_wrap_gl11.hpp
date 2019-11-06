@@ -1,6 +1,5 @@
 #pragma once
 #include "sdl_wrap_header.hpp"
-#include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h> // using OpenGL 1.1 (Compatibility profile)
 #include <SDL2/SDL_video.h>
 #include <array>
@@ -129,7 +128,15 @@ class GlObject {
 };
 
 class Cube : public GlObject {
-    const Vectors<24> v_ = {{
+  public:
+    Cube(std::array<double, 3> translation = {0},
+         std::array<double, 3> rotation = {0},
+         std::array<double, 3> scale = {1, 1, 1})
+        : GlObject(translation, rotation, scale) {}
+    void draw(GlContext *context) override { context->draw<24>(GL_QUADS, v_); }
+    void drawWire(GlContext *context) { context->draw<24>(GL_LINE_LOOP, v_); }
+
+    static constexpr Vectors<24> v_ = {{
         // front face
         {0, 0, 0},
         {1, 0, 0},
@@ -161,12 +168,4 @@ class Cube : public GlObject {
         {1, 0, 1},
         {1, 0, 0},
     }};
-
-  public:
-    Cube(std::array<double, 3> translation = {0},
-         std::array<double, 3> rotation = {0},
-         std::array<double, 3> scale = {1, 1, 1})
-        : GlObject(translation, rotation, scale) {}
-    void draw(GlContext *context) override { context->draw<24>(GL_QUADS, v_); }
-    void drawWire(GlContext *context) { context->draw<24>(GL_LINE_LOOP, v_); }
 };

@@ -1,5 +1,4 @@
 #pragma once
-#include "sdl_wrap_gl.hpp"
 #include "sdl_wrap_header.hpp"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>

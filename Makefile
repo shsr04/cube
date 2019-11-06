@@ -1,13 +1,11 @@
 default: cube
 
 Sources := *.cpp
-Flags := -std=c++17 -Wall -Wextra -Wconversion
+Flags := -std=c++17 -I. -Wall -Wextra -Wconversion
 OptFlags := -Ofast -fno-exceptions -ffast-math
 DebugFlags := -O0 -g
-Libs := -lSDL2 -lGL
+Libs := glad/glad.o -lSDL2 -lGL -ldl
 
-cube: $(Sources)
-	clang++ $(Flags) $(OptFlags) -o cube $(Sources) $(Libs)
+%: %.cpp
+	clang++ $(Flags) $(OptFlags) -o $@ $< $(Libs)
 
-run: cube
-	./cube
