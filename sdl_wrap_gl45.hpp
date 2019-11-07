@@ -7,6 +7,8 @@
 #include <SDL2/SDL_video.h>
 #include <array>
 #include <fstream>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
@@ -16,6 +18,15 @@ void setRequiredGlVersion(int major = 4, int minor = 5,
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, profile);
+}
+
+auto operator<<(std::ostream &o, glm::mat4 const &matrix) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            o << " " << std::fixed << matrix[j][i] << " ";
+        }
+        o << "\n";
+    }
 }
 
 class GlContext {
@@ -58,7 +69,7 @@ class Buffer : public GlObject {
 
   public:
     template <class T, size_t N>
-    Buffer(GLenum target, std::array<T, N> &data,
+    Buffer(GLenum target, std::array<T, N> const &data,
            GLenum usage = GL_STATIC_DRAW) {
         glGenBuffers(1, &id_);
         bind(target);
@@ -78,7 +89,7 @@ class Buffer : public GlObject {
      * Set the buffer's data to the given contents.
      */
     template <class T, size_t N>
-    void setData(std::array<T, N> &data, GLenum usage = GL_STATIC_DRAW) {
+    void setData(std::array<T, N> const &data, GLenum usage = GL_STATIC_DRAW) {
         assert_true(target_ != GL_NONE,
                     "must bind Buffer before filling with data");
         glBufferData(target_, N * sizeof(T), data.data(), usage);
@@ -199,6 +210,76 @@ class Program : public GlObject {
     void disableAttrib(std::vector<GLuint> attribs) {
         for (auto a : attribs)
             glDisableVertexAttribArray(a);
+    }
+
+    void setUniformMatrix(std::string ident, GLfloat *matrix,
+                          GLboolean transpose = GL_FALSE) {
+        auto uniform = glGetUniformLocation(id_, ident.c_str());
+        assert_true(uniform != -1, "Uniform variable " + ident + "not found");
+        glUniformMatrix4fv(uniform, 1, transpose, matrix);
+    }
+
+    void setUniformVector(std::string ident, std::array<GLfloat, 4> vec) {
+        auto uniform = glGetUniformLocation(id_, ident.c_str());
+        assert_true(uniform != -1, "Uniform variable " + ident + "not found");
+        glUniform4f(uniform, vec[0], vec[1], vec[2], vec[3]);
+    }
+};
+
+constexpr std::array<GLfloat, 8 * 3> CUBE_VERTICES = {
+    //      xyz
+    /*-1:FDL*/ -1, -1, -1, /*1:FDR*/ 1,  -1, -1,
+    /*2:FUR*/ 1,   1,  -1, /*3:FUL*/ -1, 1,  -1,
+    /*4:BDL*/ -1,  -1, 1,  /*5:BDR*/ 1,  -1, 1,
+    /*6:BUR*/ 1,   1,  1,  /*7:BUL*/ -1, 1,  1,
+};
+
+constexpr std::array<GLuint, 6 * 6> CUBE_INDICES = {
+    /*F*/ 0, 1, 2, 2, 3, 0, /*B*/ 4, 5, 6, 6, 7, 4,
+    /*U*/ 3, 4, 7, 7, 6, 3, /*D*/ 0, 1, 5, 5, 4, 0,
+    /*L*/ 0, 3, 7, 7, 4, 0, /*R*/ 1, 2, 6, 6, 5, 1,
+};
+constexpr std::array<GLuint, 6 * 8> CUBE_WIRE_INDICES = {
+    /*F*/ 0, 1, 1, 2, 2, 3, 3, 0, /*B*/ 4, 5, 5, 6, 6, 7, 7, 4,
+    /*U*/ 3, 2, 2, 6, 6, 7, 7, 3, /*D*/ 0, 1, 1, 5, 5, 4, 4, 0,
+    /*L*/ 0, 3, 3, 7, 7, 4, 4, 0, /*R*/ 1, 2, 2, 6, 6, 5, 5, 1,
+};
+
+class Cube {
+    glm::vec3 trans_ = {0, 0, 0}, rot_ = {0, glm::radians(30.f), 0},
+              scale_ = {0.5, 0.5, 0.5};
+    glm::mat4 model_{1.f};
+
+    void updateModel() {
+        auto t = glm::translate(glm::mat4(1.f), trans_);
+        auto rx = glm::rotate(t, rot_.x, glm::vec3(1, 0, 0));
+        auto ry = glm::rotate(rx, rot_.y, glm::vec3(0, 1, 0));
+        auto rz = glm::rotate(ry, rot_.z, glm::vec3(0, 0, 1));
+        auto sc = glm::scale(rz, scale_);
+        model_ = sc;
+    }
+
+  public:
+    Cube() { updateModel(); }
+    std::vector<GLuint> attr_;
+
+    void rotate(GLfloat degX, GLfloat degY, GLfloat degZ) {
+        rot_.x += glm::radians(degX);
+        rot_.y += glm::radians(degY);
+        rot_.z += glm::radians(degZ);
+        updateModel();
+    }
+    void translate(GLfloat x, GLfloat y, GLfloat z) {
+        trans_.x += x;
+        trans_.y += y;
+        trans_.z += z;
+        updateModel();
+    }
+
+    GLfloat *model() { return glm::value_ptr(model_); }
+
+    void drawElems(GLenum mode, GLint elems = CUBE_INDICES.size()) {
+        glDrawElements(mode, elems, GL_UNSIGNED_INT, 0);
     }
 };
 
