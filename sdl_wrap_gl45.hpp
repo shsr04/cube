@@ -2,9 +2,13 @@
 #include "glad/glad.h"
 #include "sdl_wrap_header.hpp"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_video.h>
 #include <array>
 #include <fstream>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <vector>
 
 void setRequiredGlVersion(int major = 4, int minor = 5,
@@ -25,17 +29,17 @@ class GlContext {
             SDL_GL_SetSwapInterval(1);
         gladLoadGLLoader(SDL_GL_GetProcAddress);
         printf("Loaded OpenGL version %s\n", glGetString(GL_VERSION));
-        assert(glGetError() == GL_NO_ERROR, "failed to create GL context");
+        assert_true(glGetError() == GL_NO_ERROR, "failed to create GL context");
     }
 };
 
 class GlObject {
   protected:
     GLuint id_;
-
-  public:
     GlObject() = default;
     ~GlObject() = default;
+
+  public:
     DEF_COPY_MOVE(GlObject, delete)
     virtual operator GLuint() { return id_; }
 };
@@ -75,7 +79,8 @@ class Buffer : public GlObject {
      */
     template <class T, size_t N>
     void setData(std::array<T, N> &data, GLenum usage = GL_STATIC_DRAW) {
-        assert(target_ != GL_NONE, "must bind Buffer before filling with data");
+        assert_true(target_ != GL_NONE,
+                    "must bind Buffer before filling with data");
         glBufferData(target_, N * sizeof(T), data.data(), usage);
     }
 };
@@ -84,16 +89,37 @@ class Texture : public GlObject {
     GLenum type_;
 
   public:
-    Texture(GLenum type = GL_TEXTURE_2D, GLenum wrap = GL_CLAMP_TO_BORDER)
+    /**
+     * Attention: texture loading is not working!
+     * Just don't do it.
+     */
+    Texture(GLenum type = GL_TEXTURE_2D, GLint wrap = GL_CLAMP_TO_BORDER)
         : type_(type) {
         glGenTextures(1, &id_);
         glBindTexture(type_, id_);
+        glTexParameterf(type_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(type_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         for (auto c : {GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R})
-            glTextureParameteri(type_, c, wrap);
+            glTexParameteri(type_, GLenum(c), wrap);
     }
+    ~Texture() { glDeleteTextures(1, &id_); }
 
     void setBorderColor(std::array<GLfloat, 4> &color) {
-        glTexParameterfv(type_, GL_TEXTURE_BORDER_COLOR, color.data()); 
+        glTexParameterfv(type_, GL_TEXTURE_BORDER_COLOR, color.data());
+    }
+
+    template <size_t W, size_t H>
+    void loadRGB(std::array<GLubyte, 3 * W * H> pixels) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, W, H, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, pixels.data());
+    }
+
+    void loadImage(SDL_Surface *image) {
+        assert_true(image->format->format == SDL_PIXELFORMAT_RGB24,
+                    "Texture image must be in RGB24 format");
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->w, image->h, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, image->pixels);
+        printf("loaded %dx%d image\n", image->w, image->h);
     }
 };
 
@@ -120,20 +146,16 @@ class Shader : public GlObject {
 };
 
 class Program : public GlObject {
-    std::vector<GLuint> shaders;
+    GLint maxAttribs_;
 
   public:
-    Program() { id_ = glCreateProgram(); }
-    ~Program() {
-        for (auto &s : shaders)
-            glDetachShader(id_, s);
-        glDeleteProgram(id_);
+    Program() {
+        id_ = glCreateProgram();
+        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribs_);
     }
+    ~Program() { glDeleteProgram(id_); }
 
-    void attachShader(GLuint id) {
-        glAttachShader(id_, id);
-        shaders.push_back(id);
-    }
+    void attachShader(GLuint id) { glAttachShader(id_, id); }
 
     void link() {
         glLinkProgram(id_);
@@ -152,18 +174,22 @@ class Program : public GlObject {
      * @param dimension number of components (between 1 and 4)
      * @param type data type of the components (e.g. GL_FLOAT, GL_INT)
      * @param normalize enables normalization of the vector
-     * @param byteStride bytes between the beginnings of two consecutive
-     * attributes (0 = no space in between)
+     * @param byteStride byte distance from start of attribute n to start of
+     * attribute n+1 (0 = no space in between)
      * @param byteOffset bytes until the beginning of the first attribute
      * @return the attribute array "location" (= unique ID)
      */
     GLuint setAttribPointer(std::string ident, GLint dimension, GLenum type,
                             GLboolean normalize = GL_FALSE,
-                            GLint byteStride = 0, void *byteOffset = nullptr) {
-        auto attrib = GLuint(glGetAttribLocation(id_, ident.c_str()));
-        glVertexAttribPointer(attrib, dimension, type, normalize, byteStride,
-                              byteOffset);
-        return attrib;
+                            GLint byteStride = 0, size_t byteOffset = 0) {
+        auto attrib = glGetAttribLocation(id_, ident.c_str());
+        assert_true(attrib != -1,
+                    "Attribute " + ident +
+                        " not found (maybe optimized out because unused?)");
+        assert_true(attrib < maxAttribs_, "Too many attributes specified");
+        glVertexAttribPointer(GLuint(attrib), dimension, type, normalize,
+                              byteStride, (void *)byteOffset);
+        return GLuint(attrib);
     }
 
     void enableAttrib(std::vector<GLuint> attribs) {

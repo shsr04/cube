@@ -91,14 +91,15 @@ class Surface {
 
 /**
  * Don't forget to init the SDL2_image library:
- *      assert((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) != 0, "PNG init failed");
+ *      assert_true((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) != 0, "PNG init
+ * failed");
  */
 class Image {
     SDL_Surface *image_;
 
   public:
     Image(std::string path) : image_(IMG_Load(path.c_str())) {
-        assert(image_, "PNG loading failed, did you forget IMG_Init?");
+        assert_true(image_, "PNG loading failed, did you forget IMG_Init?");
     }
     ~Image() { SDL_FreeSurface(image_); }
     DEF_COPY(Image, delete);
@@ -108,7 +109,7 @@ class Image {
 
     void convertTo(SDL_PixelFormat *format) {
         auto r = SDL_ConvertSurface(image_, format, 0);
-        assert(r, "surface conversion failed");
+        assert_true(r, "surface conversion failed");
         SDL_FreeSurface(image_);
         image_ = r;
     }

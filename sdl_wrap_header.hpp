@@ -14,7 +14,7 @@
 #define INSERT_IMPL(name) #name
 #define INSERT(name) INSERT_IMPL(name)
 
-inline void assert(bool expr, std::string msg, int line = 0) {
+inline void assert_true(bool expr, std::string msg, int line = 0) {
     if (!expr) {
         fprintf(stderr, "[%d] %s: %s\n", line, msg.c_str(), SDL_GetError());
         std::terminate();

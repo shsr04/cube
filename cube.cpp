@@ -78,7 +78,7 @@ int main() {
                     GL_LINES,
                     {{{lightPos[0], lightPos[1], lightPos[2]}, {0, 0, 0}}},
                     {1, 1, 1, 1});
-                //gl.drawAxes();
+                // gl.drawAxes();
                 glEnable(GL_LIGHTING);
             });
             c.draw(&gl);
